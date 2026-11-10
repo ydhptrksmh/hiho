@@ -1,0 +1,6 @@
+{
+  "name": "HIHO - Edukasi Gizi & Kesehatan",
+  "description": "Platform edukasi kesehatan dan gizi terverifikasi medis dengan panduan diet ramah penyakit, direktori nutrisi, dan tips gizi harian.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,58 @@
+import { DailyTip } from '../types';
+
+export const dailyNutritionTips: DailyTip[] = [
+  {
+    id: 1,
+    category: 'Jadwal & Urutan Makan',
+    title: 'Makan Sayur Terlebih Dahulu Sebelum Nasi',
+    tip: 'Awali suapan makan siang Anda dengan serat sayuran kukus/rebus selama 5 menit sebelum menyantap karbohidrat nasi.',
+    scientificContext: 'Riset klinis membuktikan bahwa mengonsumsi serat sayur terlebih dahulu melapisi dinding usus halus, memperlambat pengosongan lambung, dan dapat menekan lonjakan glukosa darah pascamakan hingga 35%.',
+    date: '28 Oktober 2026',
+    isActive: true,
+  },
+  {
+    id: 2,
+    category: 'Kontrol Garam & Tekanan Darah',
+    title: 'Ganti Garam dengan Rempah Aromatik Nusantara',
+    tip: 'Kurangi separuh garam dapur saat memasak sup, dan perkuat cita rasa dengan bawang putih geprek, lengkuas, sereh, dan daun salam.',
+    scientificContext: 'Bawang putih mengandung allicin yang merangsang pelepasan nitrik oksida alami untuk merelaksasi dinding arteri dan menurunkan tekanan darah tanpa kehilangan kelezatan masakan.',
+    date: '27 Oktober 2026',
+    isActive: true,
+  },
+  {
+    id: 3,
+    category: 'Pencegahan Asam Urat & Ginjal',
+    title: 'Minum Segelas Air Putih Begitu Membuka Mata',
+    tip: 'Selalu siapkan segelas air putih hangat di samping tempat tidur untuk langsung diminum saat bangun pagi.',
+    scientificContext: 'Selama 7-8 jam tidur malam, tubuh mengalami dehidrasi ringan fisiologis yang membuat konsentrasi asam urat dan urin menjadi pekat. Hidrasi pagi memicu ginjal segera membilas endapan kristal urat.',
+    date: '26 Oktober 2026',
+    isActive: true,
+  },
+  {
+    id: 4,
+    category: 'Kesehatan Lambung (GERD & Maag)',
+    title: 'Kunyah Makanan Minimal 25-30 Kali Tiap Suapan',
+    tip: 'Hindari makan terburu-buru sambil menatap layar gadget. Luangkan waktu untuk mengunyah makanan hingga lembut.',
+    scientificContext: 'Enzim ptialin (amilase saliva) bekerja optimal saat makanan terkunyah halus, mengurangi beban kerja mekanis asam lambung dan meminimalisir risiko gas serta distensi lambung.',
+    date: '25 Oktober 2026',
+    isActive: true,
+  },
+  {
+    id: 5,
+    category: 'Pengontrolan Kolesterol & Lemak Darah',
+    title: 'Pilih Ikan Kembung Segar daripada Ikan Asin Kering',
+    tip: 'Ikan kembung lokal memiliki asam lemak omega-3 setara salmon impor, dengan harga yang sangat terjangkau bagi keluarga.',
+    scientificContext: 'Omega-3 (EPA dan DHA) menurunkan sintesis VLDL di hati, menekan peradangan plak arteri jantung, dan membantu meningkatkan kolesterol baik (HDL).',
+    date: '24 Oktober 2026',
+    isActive: true,
+  },
+  {
+    id: 6,
+    category: 'Penyerapan Zat Besi & Bebas Anemia',
+    title: 'Beri Jeda 2 Jam Antara Makan Siang dan Es Teh',
+    tip: 'Jangan langsung memesan es teh manis begitu selesai makan nasi lauk. Nikmati air putih terlebih dahulu saat makan.',
+    scientificContext: 'Senyawa tanin dalam teh berikatan dengan ion zat besi non-heme membentuk presipitat tak larut, memangkas penyerapan zat besi penting hingga 60-80% dan memicu anemia tersembunyi.',
+    date: '23 Oktober 2026',
+    isActive: true,
+  },
+];
