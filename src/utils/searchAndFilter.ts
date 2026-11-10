@@ -176,32 +176,37 @@ export function validateDiseaseData(disease: Partial<Disease>): { isValid: boole
   };
 }
 
+export function getConfiguredAdminCredentials(): { validUser: string; validPass: string } {
+  const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  const procEnv = typeof process !== 'undefined' ? process.env : undefined;
+
+  const validUser =
+    metaEnv?.VITE_ADMIN_USER ||
+    metaEnv?.NEXT_PUBLIC_ADMIN_USER ||
+    procEnv?.VITE_ADMIN_USER ||
+    procEnv?.NEXT_PUBLIC_ADMIN_USER ||
+    'admin@hiho.id';
+
+  const validPass =
+    metaEnv?.VITE_ADMIN_PASS ||
+    metaEnv?.NEXT_PUBLIC_ADMIN_PASS ||
+    procEnv?.VITE_ADMIN_PASS ||
+    procEnv?.NEXT_PUBLIC_ADMIN_PASS ||
+    'HihoHealth2026!';
+
+  return { validUser, validPass };
+}
+
 export function validateAdminCredentials(identity: string, pass: string): { isValid: boolean; error?: string } {
-  const cleanId = identity.trim().toLowerCase();
-  const cleanPass = pass.trim();
+  const { validUser, validPass } = getConfiguredAdminCredentials();
 
-  if (!cleanId) {
-    return { isValid: false, error: 'Email atau username admin tidak boleh kosong.' };
-  }
-
-  if (!cleanPass) {
-    return { isValid: false, error: 'Password admin tidak boleh kosong.' };
-  }
-
-  if (
-    (cleanId === 'admin' || cleanId === 'admin@hiho.id' || cleanId === 'editor@hiho.id') &&
-    (cleanPass === 'admin123' || cleanPass === 'hiho2026' || cleanPass === 'password')
-  ) {
-    return { isValid: true };
-  }
-
-  if (cleanId.length >= 3 && cleanPass.length >= 6) {
+  if (identity.trim() === validUser && pass === validPass) {
     return { isValid: true };
   }
 
   return {
     isValid: false,
-    error: 'Kredensial tidak valid. Gunakan demo: admin@hiho.id / admin123',
+    error: 'Username atau password yang Anda masukkan salah!',
   };
 }
 

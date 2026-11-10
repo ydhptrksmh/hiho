@@ -263,16 +263,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Admin Authentication
   const login = (identity: string, pass: string): { success: boolean; error?: string } => {
-    const cleanId = identity.trim().toLowerCase();
-    const cleanPass = pass.trim();
+    const cleanId = identity.trim();
+    const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+    const procEnv = typeof process !== 'undefined' ? process.env : undefined;
 
-    // Standard demo credentials and flexible acceptance for evaluation
-    if (
-      (cleanId === 'admin' || cleanId === 'admin@hiho.id' || cleanId === 'editor@hiho.id') &&
-      (cleanPass === 'admin123' || cleanPass === 'hiho2026' || cleanPass === 'password')
-    ) {
+    const validUser =
+      metaEnv?.VITE_ADMIN_USER ||
+      metaEnv?.NEXT_PUBLIC_ADMIN_USER ||
+      procEnv?.VITE_ADMIN_USER ||
+      procEnv?.NEXT_PUBLIC_ADMIN_USER ||
+      'admin@hiho.id';
+
+    const validPass =
+      metaEnv?.VITE_ADMIN_PASS ||
+      metaEnv?.NEXT_PUBLIC_ADMIN_PASS ||
+      procEnv?.VITE_ADMIN_PASS ||
+      procEnv?.NEXT_PUBLIC_ADMIN_PASS ||
+      'HihoHealth2026!';
+
+    if (cleanId === validUser && pass === validPass) {
       const user: AdminUser = {
-        username: cleanId === 'admin' ? 'admin' : cleanId.split('@')[0],
+        username: cleanId.includes('@') ? cleanId.split('@')[0] : cleanId,
         name: 'dr. Sarah Daniswara (Admin Redaksi)',
         role: 'Super Admin & Tim Medis',
         email: cleanId.includes('@') ? cleanId : 'admin@hiho.id',
@@ -282,22 +293,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     }
 
-    // Also support custom valid input if non-empty (for user convenience)
-    if (cleanId.length >= 3 && cleanPass.length >= 6) {
-      const user: AdminUser = {
-        username: cleanId.split('@')[0],
-        name: 'Administrator HIHO',
-        role: 'Editor Konten Medis',
-        email: cleanId.includes('@') ? cleanId : `${cleanId}@hiho.id`,
-        token: `hiho_token_${Date.now()}`,
-      };
-      setAdminUser(user);
-      return { success: true };
-    }
-
     return {
       success: false,
-      error: 'Email/Username atau password tidak valid. Minimal username 3 karakter dan password 6 karakter, atau gunakan demo: admin@hiho.id / admin123',
+      error: 'Username atau password yang Anda masukkan salah!',
     };
   };
 

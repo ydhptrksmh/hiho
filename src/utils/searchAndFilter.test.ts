@@ -28,11 +28,16 @@ test('validateDiseaseData checks required fields correctly', () => {
   assert.equal(valid.errors.length, 0);
 });
 
-test('validateAdminCredentials accepts valid demo credentials and rejects empty', () => {
+test('validateAdminCredentials accepts valid production credentials and rejects empty/old demo', () => {
   assert.equal(validateAdminCredentials('', '').isValid, false);
-  assert.equal(validateAdminCredentials('admin@hiho.id', 'admin123').isValid, true);
-  assert.equal(validateAdminCredentials('admin', 'password').isValid, true);
+  assert.equal(validateAdminCredentials('admin@hiho.id', 'admin123').isValid, false);
+  assert.equal(validateAdminCredentials('admin', 'password').isValid, false);
   assert.equal(validateAdminCredentials('no', '12').isValid, false);
+  const valid = validateAdminCredentials('admin@hiho.id', 'HihoHealth2026!');
+  assert.equal(valid.isValid, true);
+  const invalid = validateAdminCredentials('admin@hiho.id', 'wrongpass');
+  assert.equal(invalid.isValid, false);
+  assert.equal(invalid.error, 'Username atau password yang Anda masukkan salah!');
 });
 
 import { diseasesData } from '../data/diseases';
