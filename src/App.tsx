@@ -22,7 +22,7 @@ import { Disease, Article, HealthCategory } from './types';
 import { ArrowUp, CheckCircle2, ShieldCheck } from 'lucide-react';
 
 function MainApp() {
-  const { diseases, articles, addArticle, deleteArticle, isAdmin } = useData();
+  const { diseases, articles, addArticle, deleteArticle, isAdmin, isLoadingData } = useData();
 
   // Mode: public site or admin portal
   const [isAdminMode, setIsAdminMode] = useState<boolean>(() => {
@@ -118,6 +118,11 @@ function MainApp() {
 
       {/* Main Content View Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        {isLoadingData && diseases.length === 0 && articles.length === 0 && (
+          <div className="mb-6 p-4 rounded-2xl bg-white border border-emerald-200 shadow-xs text-center text-xs sm:text-sm font-semibold text-emerald-900 animate-pulse">
+            Memuat data direktori penyakit &amp; artikel terbaru...
+          </div>
+        )}
         {currentTab === 'home' && (
           <HomeView
             featuredDiseases={diseases}
@@ -147,9 +152,9 @@ function MainApp() {
             articles={publishedArticles}
             onSelectArticle={(a) => setSelectedArticle(a)}
             onOpenCreateArticle={() => setIsCreateArticleOpen(true)}
-            onDeleteArticle={(id) => {
-              deleteArticle(id);
-              showToast('Artikel berhasil dihapus.');
+            onDeleteArticle={async (id) => {
+              const res = await deleteArticle(id);
+              showToast(res.success ? 'Artikel berhasil dihapus.' : res.error || 'Gagal menghapus artikel.');
             }}
           />
         )}
@@ -196,10 +201,14 @@ function MainApp() {
       <CreateArticleModal
         isOpen={isCreateArticleOpen}
         onClose={() => setIsCreateArticleOpen(false)}
-        onSaveArticle={(newArt) => {
-          addArticle(newArt);
-          showToast(`Artikel "${newArt.title}" berhasil diterbitkan!`);
-          setSelectedArticle(newArt);
+        onSaveArticle={async (newArt) => {
+          const res = await addArticle({ ...newArt, status: 'published' });
+          if (res.success) {
+            showToast(`Artikel "${newArt.title}" berhasil diterbitkan!`);
+            setSelectedArticle(newArt);
+          } else {
+            showToast(res.error || 'Gagal menerbitkan artikel ke database.');
+          }
         }}
       />
 

@@ -13,6 +13,7 @@ import {
   Sliders,
   ShieldCheck,
   Camera,
+  AlertCircle,
 } from 'lucide-react';
 
 interface AdminDashboardViewProps {
@@ -28,12 +29,21 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onOpenCreateDisease,
   onOpenCreateArticle,
 }) => {
-  const { stats, diseases, articles, tips, resetDiseases, resetArticles, resetTips } = useData();
+  const {
+    stats,
+    diseases,
+    articles,
+    tips,
+    isSchemaMissing,
+    retrySupabaseSync,
+    resetDiseases,
+    resetArticles,
+    resetTips,
+  } = useData();
 
-  const handleResetAll = () => {
+  const handleResetAll = async () => {
     if (window.confirm('Apakah Anda yakin ingin mereset seluruh data penyakit, artikel, dan tips ke setelan default awal?')) {
-      resetDiseases();
-      resetArticles();
+      await Promise.all([resetDiseases(), resetArticles()]);
       resetTips();
     }
   };
@@ -71,6 +81,48 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </button>
         </div>
       </div>
+
+      {isSchemaMissing && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-950">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold">Tabel Supabase belum dibuat (diseases &amp; articles)</p>
+              <p className="text-amber-900">
+                Jalankan script SQL dari <code className="font-mono bg-amber-100 px-1.5 py-0.5 rounded">supabase/schema.sql</code> di Supabase Dashboard → SQL Editor, lalu klik muat ulang. Data sementara tetap tersimpan lokal agar situs berjalan normal.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={retrySupabaseSync}
+            className="px-3.5 py-2 rounded-xl bg-amber-900 hover:bg-amber-950 text-white font-bold shrink-0 transition-colors"
+          >
+            Cek Koneksi Ulang
+          </button>
+        </div>
+      )}
+
+      {!isSchemaMissing && diseases.length === 0 && articles.length === 0 && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-emerald-950">
+          <div className="flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold">Supabase terhubung, namun tabel masih kosong</p>
+              <p className="text-emerald-900">
+                Klik tombol di sebelah kanan untuk mengisi data awal HIHO (8 kondisi penyakit &amp; 6 artikel gizi) ke Supabase, atau tambahkan data baru secara manual.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => Promise.all([resetDiseases(), resetArticles()])}
+            className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold shrink-0 transition-colors"
+          >
+            Isi Data Awal ke Supabase
+          </button>
+        </div>
+      )}
 
       {/* 4 Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

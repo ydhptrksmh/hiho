@@ -163,4 +163,75 @@ test('validateActivityData validates required title and imageUrl', () => {
   assert.equal(valid.errors.length, 0);
 });
 
+import {
+  mapDiseaseToRow,
+  mapRowToDisease,
+  mapArticleToRow,
+  mapRowToArticle,
+  isSchemaMissingError,
+  DiseaseRow,
+  ArticleRow,
+} from '../lib/supabase';
+
+test('isSchemaMissingError detects PGRST205 and 42P01 missing table errors cleanly', () => {
+  assert.equal(isSchemaMissingError(null), false);
+  assert.equal(
+    isSchemaMissingError({
+      code: 'PGRST205',
+      message: "Could not find the table 'public.diseases' in the schema cache",
+    }),
+    true
+  );
+  assert.equal(
+    isSchemaMissingError({
+      code: '42P01',
+      message: 'relation "public.articles" does not exist',
+    }),
+    true
+  );
+  assert.equal(
+    isSchemaMissingError({
+      code: '42501',
+      message: 'new row violates row-level security policy',
+    }),
+    false
+  );
+});
+
+test('Supabase disease mappers round-trip nested JSONB fields cleanly', () => {
+  const sample = diseasesData[0];
+  const row = mapDiseaseToRow(sample) as DiseaseRow;
+  assert.equal(row.id, sample.id);
+  assert.equal(row.indonesian_name, sample.indonesianName);
+  assert.deepEqual(row.allowed_foods, sample.allowedFoods);
+  assert.deepEqual(row.avoid_foods, sample.avoidFoods);
+  assert.deepEqual(row.sample_meal_plan, sample.sampleMealPlan);
+
+  const roundTripped = mapRowToDisease(row);
+  assert.equal(roundTripped.id, sample.id);
+  assert.equal(roundTripped.name, sample.name);
+  assert.equal(roundTripped.indonesianName, sample.indonesianName);
+  assert.deepEqual(roundTripped.allowedFoods, sample.allowedFoods);
+  assert.deepEqual(roundTripped.avoidFoods, sample.avoidFoods);
+  assert.deepEqual(roundTripped.sampleMealPlan, sample.sampleMealPlan);
+});
+
+test('Supabase article mappers round-trip articles and draft status cleanly', () => {
+  const sample = { ...articlesData[0], status: 'draft' as const };
+  const row = mapArticleToRow(sample) as ArticleRow;
+  assert.equal(row.id, sample.id);
+  assert.equal(row.reading_time, sample.readingTime);
+  assert.equal(row.status, 'draft');
+  assert.deepEqual(row.key_takeaways, sample.keyTakeaways);
+  assert.deepEqual(row.content_paragraphs, sample.contentParagraphs);
+  assert.deepEqual(row.references, sample.references);
+
+  const roundTripped = mapRowToArticle(row);
+  assert.equal(roundTripped.id, sample.id);
+  assert.equal(roundTripped.title, sample.title);
+  assert.equal(roundTripped.status, 'draft');
+  assert.deepEqual(roundTripped.keyTakeaways, sample.keyTakeaways);
+  assert.deepEqual(roundTripped.contentParagraphs, sample.contentParagraphs);
+  assert.deepEqual(roundTripped.references, sample.references);
+});
 

@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 
 export const AdminDiseasesView: React.FC = () => {
-  const { diseases, addDisease, updateDisease, deleteDisease } = useData();
+  const { diseases, addDisease, updateDisease, deleteDisease, dataError, clearDataError } = useData();
 
   // Search & Filter & Pagination
   const [search, setSearch] = useState('');
@@ -94,6 +94,7 @@ export const AdminDiseasesView: React.FC = () => {
   const [dinner, setDinner] = useState('');
 
   const [formErrors, setFormErrors] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Disease | null>(null);
 
   // File input refs
@@ -308,7 +309,7 @@ export const AdminDiseasesView: React.FC = () => {
   };
 
   // Save Disease
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const finalCategoryName = isCustomCategory ? customCategory.trim() : category;
@@ -348,9 +349,12 @@ export const AdminDiseasesView: React.FC = () => {
       dinner: dinner.trim() || 'Makan malam porsi ringan sebelum pukul 19.30.',
     };
 
+    setIsSaving(true);
+    setFormErrors([]);
+
+    let result;
     if (editingDisease) {
-      // Update existing
-      updateDisease(editingDisease.id, {
+      result = await updateDisease(editingDisease.id, {
         name: name.trim(),
         indonesianName: indonesianName.trim() || name.trim(),
         category: finalCategoryName,
@@ -371,7 +375,6 @@ export const AdminDiseasesView: React.FC = () => {
         sampleMealPlan: mealPlan,
       });
     } else {
-      // Create new disease
       const newId = `penyakit-${Date.now()}`;
       const newEntry: Disease = {
         id: newId,
@@ -400,16 +403,23 @@ export const AdminDiseasesView: React.FC = () => {
         avoidFoods,
         sampleMealPlan: mealPlan,
       };
-      addDisease(newEntry);
+      result = await addDisease(newEntry);
+    }
+
+    setIsSaving(false);
+
+    if (!result.success) {
+      setFormErrors([result.error || 'Gagal menyimpan data penyakit ke database.']);
+      return;
     }
 
     setIsModalOpen(false);
     resetForm();
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deleteTarget) {
-      deleteDisease(deleteTarget.id);
+      await deleteDisease(deleteTarget.id);
       setDeleteTarget(null);
     }
   };
@@ -479,6 +489,22 @@ export const AdminDiseasesView: React.FC = () => {
           <span>Tambah Penyakit Baru</span>
         </button>
       </div>
+
+      {dataError && (
+        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-xs text-rose-800">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{dataError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={clearDataError}
+            className="text-rose-700 hover:text-rose-900 font-bold"
+          >
+            Tutup
+          </button>
+        </div>
+      )}
 
       {/* Search and Category Filter Toolbar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -1566,9 +1592,14 @@ export const AdminDiseasesView: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-md transition-all hover:scale-102"
+                    disabled={isSaving}
+                    className="px-6 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-bold rounded-xl shadow-md transition-all hover:scale-102"
                   >
-                    {editingDisease ? 'Simpan Perubahan Penyakit' : 'Terbitkan Data Penyakit'}
+                    {isSaving
+                      ? 'Menyimpan...'
+                      : editingDisease
+                        ? 'Simpan Perubahan Penyakit'
+                        : 'Terbitkan Data Penyakit'}
                   </button>
                 </div>
               </div>

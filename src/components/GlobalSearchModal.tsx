@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Disease, Article } from '../types';
-import { diseasesData } from '../data/diseases';
-import { articlesData } from '../data/articles';
+import { useData } from '../context/DataContext';
 import { foodDatabase } from '../data/foodDatabase';
 import { searchGlobal, GlobalSearchResult } from '../utils/searchAndFilter';
 import { Search, X, Activity, BookOpen, Utensils, ArrowRight } from 'lucide-react';
@@ -21,6 +20,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   onSelectArticle,
   onOpenFoodChecker,
 }) => {
+  const { diseases, articles } = useData();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<GlobalSearchResult>({
     diseases: [],
@@ -40,6 +40,12 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
+    if (!query) return;
+    const published = articles.filter((a) => a.status !== 'draft');
+    setResults(searchGlobal(query, diseases, published, foodDatabase));
+  }, [query, diseases, articles]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
@@ -55,7 +61,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
 
   const handleQueryChange = (val: string) => {
     setQuery(val);
-    const res = searchGlobal(val, diseasesData, articlesData, foodDatabase);
+    const published = articles.filter((a) => a.status !== 'draft');
+    const res = searchGlobal(val, diseases, published, foodDatabase);
     setResults(res);
   };
 

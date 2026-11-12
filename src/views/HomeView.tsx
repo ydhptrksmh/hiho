@@ -197,15 +197,26 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
         {/* Responsive Grid: Maximum exactly 3 cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {featuredDiseases.slice(0, 3).map((disease) => (
-            <DiseaseCard
-              key={disease.id}
-              disease={disease}
-              onSelect={onSelectDisease}
-            />
-          ))}
-        </div>
+        {featuredDiseases.length === 0 ? (
+          <div className="bg-white rounded-3xl p-8 text-center border border-slate-200 shadow-xs space-y-2">
+            <p className="text-sm font-bold text-slate-800">
+              Belum ada data penyakit yang dipublikasikan.
+            </p>
+            <p className="text-xs text-slate-500">
+              Tambahkan kondisi medis atau isi data bawaan melalui Portal Admin.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {featuredDiseases.slice(0, 3).map((disease) => (
+              <DiseaseCard
+                key={disease.id}
+                disease={disease}
+                onSelect={onSelectDisease}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Prominent "Lihat Semua Penyakit" button */}
         <div className="flex justify-center pt-2">
@@ -248,83 +259,94 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
         {/* Articles Responsive Grid: Maximum exactly 3 cards, fully clickable */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {latestArticles.slice(0, 3).map((article) => (
-            <div
-              key={article.id}
-              onClick={() => onSelectArticle(article)}
-              className="bg-white rounded-3xl overflow-hidden border border-slate-200/80 hover:border-emerald-300 shadow-xs hover:shadow-lg transition-all duration-200 ease-in-out hover:-translate-y-1 flex flex-col justify-between group cursor-pointer"
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onSelectArticle(article);
-                }
-              }}
-            >
-              {/* Cover Image Thumbnail if available */}
-              {article.imageUrl ? (
-                <div className="h-44 w-full overflow-hidden relative bg-slate-100">
-                  <img
-                    src={article.imageUrl}
-                    alt={article.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                  />
-                  <div className="absolute top-3 left-3">
-                    <span className="text-[10px] font-bold text-emerald-950 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-full border border-emerald-200 shadow-xs">
-                      {article.category}
+        {latestArticles.length === 0 ? (
+          <div className="bg-white rounded-3xl p-8 text-center border border-slate-200 shadow-xs space-y-2">
+            <p className="text-sm font-bold text-slate-800">
+              Belum ada artikel gizi yang diterbitkan.
+            </p>
+            <p className="text-xs text-slate-500">
+              Terbitkan artikel pertama Anda melalui Portal Admin atau menu Artikel Gizi.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {latestArticles.slice(0, 3).map((article) => (
+              <div
+                key={article.id}
+                onClick={() => onSelectArticle(article)}
+                className="bg-white rounded-3xl overflow-hidden border border-slate-200/80 hover:border-emerald-300 shadow-xs hover:shadow-lg transition-all duration-200 ease-in-out hover:-translate-y-1 flex flex-col justify-between group cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectArticle(article);
+                  }
+                }}
+              >
+                {/* Cover Image Thumbnail if available */}
+                {article.imageUrl ? (
+                  <div className="h-44 w-full overflow-hidden relative bg-slate-100">
+                    <img
+                      src={article.imageUrl}
+                      alt={article.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                    <div className="absolute top-3 left-3">
+                      <span className="text-[10px] font-bold text-emerald-950 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-full border border-emerald-200 shadow-xs">
+                        {article.category}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="p-4 sm:p-6 space-y-3 flex-1 flex flex-col justify-between">
+                  <div className="space-y-2.5">
+                    {!article.imageUrl && (
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <span className="font-bold text-emerald-800">{article.category}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{article.readingTime}</span>
+                      </div>
+                    )}
+
+                    {article.imageUrl && (
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <span>{article.readingTime}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{article.publishDate}</span>
+                      </div>
+                    )}
+
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 group-hover:text-emerald-950 transition-colors leading-snug line-clamp-2">
+                      {article.title}
+                    </h3>
+
+                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">
+                      {article.summary}
+                    </p>
+                  </div>
+
+                  <div className="pt-4 mt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500 font-medium truncate max-w-[170px]">
+                      Review: {article.reviewer}
+                    </span>
+                    <span
+                      className="text-xs font-bold text-slate-900 group-hover:text-emerald-800 inline-flex items-center gap-1"
+                    >
+                      <span>Baca</span>
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                     </span>
                   </div>
                 </div>
-              ) : null}
-
-              <div className="p-4 sm:p-6 space-y-3 flex-1 flex flex-col justify-between">
-                <div className="space-y-2.5">
-                  {!article.imageUrl && (
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <span className="font-bold text-emerald-800">{article.category}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{article.readingTime}</span>
-                    </div>
-                  )}
-
-                  {article.imageUrl && (
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <span>{article.readingTime}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{article.publishDate}</span>
-                    </div>
-                  )}
-
-                  <h3 className="text-base sm:text-lg font-black text-slate-900 group-hover:text-emerald-950 transition-colors leading-snug line-clamp-2">
-                    {article.title}
-                  </h3>
-
-                  <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">
-                    {article.summary}
-                  </p>
-                </div>
-
-                <div className="pt-4 mt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-[11px] text-slate-500 font-medium truncate max-w-[170px]">
-                    Review: {article.reviewer}
-                  </span>
-                  <span
-                    className="text-xs font-bold text-slate-900 group-hover:text-emerald-800 inline-flex items-center gap-1"
-                  >
-                    <span>Baca</span>
-                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                  </span>
-                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Prominent "Lihat Semua Artikel" button */}
         <div className="flex justify-center pt-2">

@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 export const AdminArticlesView: React.FC = () => {
-  const { articles, addArticle, updateArticle, deleteArticle } = useData();
+  const { articles, addArticle, updateArticle, deleteArticle, dataError, clearDataError } = useData();
 
   // Search and Filter State
   const [search, setSearch] = useState('');
@@ -60,6 +60,7 @@ export const AdminArticlesView: React.FC = () => {
   const [urlPosterLink, setUrlPosterLink] = useState('');
 
   const [formErrors, setFormErrors] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Article | null>(null);
 
   const posterFileInputRef = useRef<HTMLInputElement>(null);
@@ -162,7 +163,7 @@ export const AdminArticlesView: React.FC = () => {
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const paragraphs = rawContent
@@ -197,9 +198,12 @@ export const AdminArticlesView: React.FC = () => {
       return;
     }
 
+    setIsSaving(true);
+    setFormErrors([]);
+
+    let result;
     if (editingArticle) {
-      // Update
-      updateArticle(editingArticle.id, {
+      result = await updateArticle(editingArticle.id, {
         title: title.trim(),
         summary: summary.trim(),
         category,
@@ -214,7 +218,6 @@ export const AdminArticlesView: React.FC = () => {
         references: refs.length > 0 ? refs : editingArticle.references,
       });
     } else {
-      // Create new
       const newEntry: Article = {
         id: `artikel-${Date.now()}`,
         title: title.trim(),
@@ -237,21 +240,28 @@ export const AdminArticlesView: React.FC = () => {
                 'World Health Organization (WHO) Nutrition Standards.',
               ],
       };
-      addArticle(newEntry);
+      result = await addArticle(newEntry);
+    }
+
+    setIsSaving(false);
+
+    if (!result.success) {
+      setFormErrors([result.error || 'Gagal menyimpan artikel ke database.']);
+      return;
     }
 
     setIsModalOpen(false);
     resetForm();
   };
 
-  const handleToggleStatus = (article: Article) => {
+  const handleToggleStatus = async (article: Article) => {
     const nextStatus = article.status === 'draft' ? 'published' : 'draft';
-    updateArticle(article.id, { status: nextStatus });
+    await updateArticle(article.id, { status: nextStatus });
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deleteTarget) {
-      deleteArticle(deleteTarget.id);
+      await deleteArticle(deleteTarget.id);
       setDeleteTarget(null);
     }
   };
@@ -309,6 +319,22 @@ export const AdminArticlesView: React.FC = () => {
           <span>Tambah Artikel Baru</span>
         </button>
       </div>
+
+      {dataError && (
+        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-xs text-rose-800">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{dataError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={clearDataError}
+            className="text-rose-700 hover:text-rose-900 font-bold"
+          >
+            Tutup
+          </button>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -950,9 +976,14 @@ export const AdminArticlesView: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-xs cursor-pointer transition-all duration-200 ease-in-out hover:scale-102 hover:-translate-y-0.5"
+                    disabled={isSaving}
+                    className="px-6 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-bold rounded-xl shadow-xs cursor-pointer transition-all duration-200 ease-in-out hover:scale-102 hover:-translate-y-0.5"
                   >
-                    {editingArticle ? 'Simpan Perubahan' : 'Terbitkan Artikel'}
+                    {isSaving
+                      ? 'Menyimpan...'
+                      : editingArticle
+                        ? 'Simpan Perubahan'
+                        : 'Terbitkan Artikel'}
                   </button>
                 </div>
               </div>
