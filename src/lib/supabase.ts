@@ -2,7 +2,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Article, Disease, FoodGuideline, SampleMealPlan } from '../types';
 
 export const SUPABASE_URL = 'https://fnemzuoszcgxnfhlmqnt.supabase.co';
-export const SUPABASE_ANON_KEY = 'PASTE_PUBLISHABLE_KEY_LENGKAP_DISINI';
+export const SUPABASE_ANON_KEY = 'sb_publishable_hxIP4wG4eWC3WZbEMycWjg_6MqSsbq8';
 
 export const DEFAULT_SUPABASE_URL = SUPABASE_URL;
 export const DEFAULT_SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;

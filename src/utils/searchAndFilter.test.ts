@@ -179,14 +179,19 @@ import {
 test('resolveSupabaseConfig falls back to hardcoded default URL and placeholder key when env is empty', () => {
   const empty = resolveSupabaseConfig('', '');
   assert.equal(empty.url, 'https://fnemzuoszcgxnfhlmqnt.supabase.co');
-  assert.equal(empty.anonKey, 'PASTE_PUBLISHABLE_KEY_LENGKAP_DISINI');
-  assert.equal(empty.isPlaceholderKey, true);
-  assert.equal(empty.isConfigured, false);
+  assert.equal(empty.anonKey, 'sb_publishable_hxIP4wG4eWC3WZbEMycWjg_6MqSsbq8');
+  assert.equal(empty.isPlaceholderKey, false);
+  assert.equal(empty.isConfigured, true);
 
   const exampleEnv = resolveSupabaseConfig('MY_SUPABASE_URL', 'MY_SUPABASE_ANON_KEY');
   assert.equal(exampleEnv.url, DEFAULT_SUPABASE_URL);
   assert.equal(exampleEnv.anonKey, DEFAULT_SUPABASE_ANON_KEY);
-  assert.equal(exampleEnv.isConfigured, false);
+  assert.equal(exampleEnv.isPlaceholderKey, false);
+  assert.equal(exampleEnv.isConfigured, true);
+
+  const placeholderEnv = resolveSupabaseConfig('', 'PASTE_PUBLISHABLE_KEY_LENGKAP_DISINI');
+  assert.equal(placeholderEnv.isPlaceholderKey, true);
+  assert.equal(placeholderEnv.isConfigured, false);
 
   const customKeyOnly = resolveSupabaseConfig('', 'sb_publishable_live_key_123');
   assert.equal(customKeyOnly.url, DEFAULT_SUPABASE_URL);
