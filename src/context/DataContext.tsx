@@ -70,42 +70,17 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-const STORAGE_DISEASES_KEY = 'hiho_diseases_data_v4';
-const STORAGE_ARTICLES_KEY = 'hiho_articles_data_v4';
 const STORAGE_TIPS_KEY = 'hiho_tips_data_v4';
 const STORAGE_ACTIVITIES_KEY = 'hiho_activities_data_v6';
 const STORAGE_ADMIN_KEY = 'hiho_admin_session_v4';
 
-function loadFallbackDiseases(): Disease[] {
-  try {
-    const saved = localStorage.getItem(STORAGE_DISEASES_KEY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch {
-    // fallback
-  }
-  return defaultDiseases;
-}
-
-function loadFallbackArticles(): Article[] {
-  try {
-    const saved = localStorage.getItem(STORAGE_ARTICLES_KEY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch {
-    // fallback
-  }
-  return defaultArticles.map((a) => ({ ...a, status: a.status || 'published' }));
-}
+const SUPABASE_KEY_MISSING_MSG =
+  'Koneksi Supabase belum aktif: ganti PASTE_PUBLISHABLE_KEY_LENGKAP_DISINI pada src/lib/supabase.ts dengan Publishable/Anon Key Supabase Anda.';
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Diseases State (starts with local fallback so the site never renders blank if tables aren't created yet)
-  const [diseases, setDiseases] = useState<Disease[]>(loadFallbackDiseases);
-
-  // Articles State (ensure default status is published)
-  const [articles, setArticles] = useState<Article[]>(loadFallbackArticles);
+  // Single Source of Truth: always starts empty and loads directly from Supabase
+  const [diseases, setDiseases] = useState<Disease[]>([]);
+  const [articles, setArticles] = useState<Article[]>([]);
 
   const [isLoadingData, setIsLoadingData] = useState<boolean>(isSupabaseConfigured);
   const [isSchemaMissing, setIsSchemaMissing] = useState<boolean>(false);
@@ -113,9 +88,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearDataError = useCallback(() => setDataError(null), []);
 
-  // Keep refs for safe rollback during optimistic mutations
+  // Keep refs for safe rollback during optimistic mutations, auto-seed deduplication, and refresh throttling
   const diseasesRef = useRef<Disease[]>(diseases);
   const articlesRef = useRef<Article[]>(articles);
+  const autoSeedInFlightRef = useRef<boolean>(false);
+  const fetchInFlightRef = useRef<boolean>(false);
+  const lastFetchAtRef = useRef<number>(0);
 
   useEffect(() => {
     diseasesRef.current = diseases;
@@ -164,75 +142,161 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
 
-  const loadSupabaseData = useCallback(async () => {
-    const client = supabase;
-    if (!client) {
+  const loadSupabaseData = useCallback(async (options?: { silent?: boolean }) => {
+    if (!isSupabaseConfigured) {
       setIsLoadingData(false);
+      setDataError(SUPABASE_KEY_MISSING_MSG);
       return;
     }
 
-    setIsLoadingData(true);
+    if (fetchInFlightRef.current) {
+      return;
+    }
+
+    fetchInFlightRef.current = true;
+    if (!options?.silent) {
+      setIsLoadingData(true);
+    }
+
     try {
       const [diseasesRes, articlesRes] = await Promise.all([
-        client.from('diseases').select('*').order('created_at', { ascending: false }),
-        client.from('articles').select('*').order('created_at', { ascending: false }),
+        supabase.from('diseases').select('*').order('created_at', { ascending: false }),
+        supabase.from('articles').select('*').order('created_at', { ascending: false }),
       ]);
 
       const missingDiseasesTable = isSchemaMissingError(diseasesRes.error);
       const missingArticlesTable = isSchemaMissingError(articlesRes.error);
 
       if (missingDiseasesTable || missingArticlesTable) {
-        console.warn(
-          'Tabel Supabase belum tersedia (PGRST205). Menggunakan data lokal sementara hingga script supabase/schema.sql dijalankan.'
-        );
+        const missingMsg =
+          'Tabel public.diseases atau public.articles belum tersedia di Supabase. Jalankan script supabase/schema.sql di SQL Editor Supabase Anda.';
+        console.error(missingMsg);
         setIsSchemaMissing(true);
-        setDiseases(loadFallbackDiseases());
-        setArticles(loadFallbackArticles());
-        setDataError(null);
+        setDataError(missingMsg);
         return;
       }
 
       setIsSchemaMissing(false);
+      let nextError: string | null = null;
 
-      if (diseasesRes.error) {
-        console.warn('Gagal mengambil data penyakit dari Supabase:', diseasesRes.error.message);
-        setDataError(`Gagal memuat data penyakit: ${diseasesRes.error.message}`);
-      } else {
-        const mappedDiseases = (diseasesRes.data as DiseaseRow[]).map(mapRowToDisease);
-        setDiseases(mappedDiseases);
-        setDataError(null);
-      }
+      const diseaseRows = (!diseasesRes.error && (diseasesRes.data as DiseaseRow[])) || [];
+      const articleRows = (!articlesRes.error && (articlesRes.data as ArticleRow[])) || [];
 
-      if (articlesRes.error) {
-        console.warn('Gagal mengambil data artikel dari Supabase:', articlesRes.error.message);
-        setDataError(`Gagal memuat data artikel: ${articlesRes.error.message}`);
+      const needSeedDiseases = !diseasesRes.error && diseaseRows.length === 0;
+      const needSeedArticles = !articlesRes.error && articleRows.length === 0;
+
+      if ((needSeedDiseases || needSeedArticles) && !autoSeedInFlightRef.current) {
+        autoSeedInFlightRef.current = true;
+        const seededDefaultArticles = defaultArticles.map((a) => ({
+          ...a,
+          status: a.status || 'published',
+        }));
+
+        const [seededDiseasesRes, seededArticlesRes] = await Promise.all([
+          needSeedDiseases
+            ? supabase
+                .from('diseases')
+                .upsert(defaultDiseases.map((d) => mapDiseaseToRow(d)), { onConflict: 'id' })
+                .select()
+            : Promise.resolve(null),
+          needSeedArticles
+            ? supabase
+                .from('articles')
+                .upsert(seededDefaultArticles.map((a) => mapArticleToRow(a)), { onConflict: 'id' })
+                .select()
+            : Promise.resolve(null),
+        ]);
+
+        if (needSeedDiseases) {
+          if (seededDiseasesRes?.error) {
+            console.error('Auto-seed diseases Supabase gagal:', seededDiseasesRes.error.message);
+            nextError = `Gagal auto-seed data penyakit ke Supabase: ${seededDiseasesRes.error.message}`;
+          } else if (seededDiseasesRes?.data) {
+            setDiseases((seededDiseasesRes.data as DiseaseRow[]).map(mapRowToDisease));
+          }
+        } else if (!diseasesRes.error) {
+          setDiseases(diseaseRows.map(mapRowToDisease));
+        }
+
+        if (needSeedArticles) {
+          if (seededArticlesRes?.error) {
+            console.error('Auto-seed articles Supabase gagal:', seededArticlesRes.error.message);
+            nextError =
+              nextError || `Gagal auto-seed data artikel ke Supabase: ${seededArticlesRes.error.message}`;
+          } else if (seededArticlesRes?.data) {
+            setArticles((seededArticlesRes.data as ArticleRow[]).map(mapRowToArticle));
+          }
+        } else if (!articlesRes.error) {
+          setArticles(articleRows.map(mapRowToArticle));
+        }
       } else {
-        const mappedArticles = (articlesRes.data as ArticleRow[]).map(mapRowToArticle);
-        setArticles(mappedArticles);
         if (!diseasesRes.error) {
-          setDataError(null);
+          setDiseases(diseaseRows.map(mapRowToDisease));
+        }
+        if (!articlesRes.error) {
+          setArticles(articleRows.map(mapRowToArticle));
         }
       }
+
+      if (diseasesRes.error) {
+        console.error('Gagal mengambil data penyakit dari Supabase:', diseasesRes.error.message);
+        nextError = nextError || `Gagal memuat data penyakit dari Supabase: ${diseasesRes.error.message}`;
+      }
+      if (articlesRes.error) {
+        console.error('Gagal mengambil data artikel dari Supabase:', articlesRes.error.message);
+        nextError = nextError || `Gagal memuat data artikel dari Supabase: ${articlesRes.error.message}`;
+      }
+
+      setDataError(nextError);
+      lastFetchAtRef.current = Date.now();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Gagal terhubung ke Supabase';
-      console.warn('Koneksi Supabase gagal, menggunakan data lokal:', msg);
-      setDataError(msg);
+      console.error('Koneksi Supabase gagal:', msg);
+      setDataError(`Gagal terhubung ke Supabase: ${msg}`);
     } finally {
+      autoSeedInFlightRef.current = false;
+      fetchInFlightRef.current = false;
       setIsLoadingData(false);
     }
   }, []);
 
-  // Fetch initial Diseases & Articles from Supabase
+  // Fetch initial Diseases & Articles from Supabase (with automatic empty-table seeding)
   useEffect(() => {
     loadSupabaseData();
   }, [loadSupabaseData]);
 
-  // Subscribe to Realtime changes only once tables are confirmed available
+  // Auto-refresh from Supabase when browser tab regains focus or becomes visible across devices
   useEffect(() => {
-    const client = supabase;
-    if (!client || isSchemaMissing) {
+    if (!isSupabaseConfigured) {
       return;
     }
+
+    const handleSyncOnResume = () => {
+      if (document.visibilityState && document.visibilityState !== 'visible') {
+        return;
+      }
+      if (Date.now() - lastFetchAtRef.current < 1500) {
+        return;
+      }
+      void loadSupabaseData({ silent: true });
+    };
+
+    window.addEventListener('focus', handleSyncOnResume);
+    document.addEventListener('visibilitychange', handleSyncOnResume);
+
+    return () => {
+      window.removeEventListener('focus', handleSyncOnResume);
+      document.removeEventListener('visibilitychange', handleSyncOnResume);
+    };
+  }, [loadSupabaseData]);
+
+  // Subscribe to Realtime changes only once tables are confirmed available
+  useEffect(() => {
+    if (!isSupabaseConfigured || isSchemaMissing) {
+      return;
+    }
+
+    const client = supabase;
 
     const channel = client
       .channel('hiho-realtime-sync')
@@ -299,25 +363,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [isSchemaMissing]);
 
-  // Sync Diseases to LocalStorage when running in offline/fallback or schema-pending mode
-  useEffect(() => {
-    if (isSupabaseConfigured && !isSchemaMissing) return;
-    try {
-      localStorage.setItem(STORAGE_DISEASES_KEY, JSON.stringify(diseases));
-    } catch (e) {
-      console.warn('Failed to sync diseases:', e);
-    }
-  }, [diseases, isSchemaMissing]);
 
-  // Sync Articles to LocalStorage when running in offline/fallback or schema-pending mode
-  useEffect(() => {
-    if (isSupabaseConfigured && !isSchemaMissing) return;
-    try {
-      localStorage.setItem(STORAGE_ARTICLES_KEY, JSON.stringify(articles));
-    } catch (e) {
-      console.warn('Failed to sync articles:', e);
-    }
-  }, [articles, isSchemaMissing]);
 
   // Sync Tips to LocalStorage
   useEffect(() => {
@@ -350,33 +396,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [adminUser]);
 
-  // Diseases CRUD Implementations
+  // Diseases CRUD Implementations (Strict Supabase Single Source of Truth)
   const addDisease = async (newDisease: Disease): Promise<CrudResult> => {
+    if (!isSupabaseConfigured) {
+      setDataError(SUPABASE_KEY_MISSING_MSG);
+      return { success: false, error: SUPABASE_KEY_MISSING_MSG };
+    }
+
     const previous = diseasesRef.current;
     setDiseases((prev) => [newDisease, ...prev]);
-
-    if (!supabase || isSchemaMissing) {
-      return { success: true };
-    }
 
     const rowPayload = mapDiseaseToRow(newDisease);
     const { data, error } = await supabase
       .from('diseases')
-      .insert(rowPayload)
+      .upsert(rowPayload, { onConflict: 'id' })
       .select()
       .single();
 
     if (error) {
       if (isSchemaMissingError(error)) {
         setIsSchemaMissing(true);
-        return { success: true };
       }
-      console.warn('Supabase addDisease error:', error.message);
+      console.error('Supabase addDisease error:', error.message);
       setDiseases(previous);
-      setDataError(`Gagal menambah penyakit: ${error.message}`);
-      return { success: false, error: error.message };
+      const errMsg = `Gagal menyimpan penyakit ke Supabase: ${error.message}`;
+      setDataError(errMsg);
+      return { success: false, error: errMsg };
     }
 
+    setIsSchemaMissing(false);
+    setDataError(null);
     if (data) {
       const synced = mapRowToDisease(data as DiseaseRow);
       setDiseases((prev) => prev.map((d) => (d.id === synced.id ? synced : d)));
@@ -385,12 +434,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateDisease = async (id: string, updated: Partial<Disease>): Promise<CrudResult> => {
+    if (!isSupabaseConfigured) {
+      setDataError(SUPABASE_KEY_MISSING_MSG);
+      return { success: false, error: SUPABASE_KEY_MISSING_MSG };
+    }
+
     const previous = diseasesRef.current;
     setDiseases((prev) => prev.map((d) => (d.id === id ? { ...d, ...updated } : d)));
-
-    if (!supabase || isSchemaMissing) {
-      return { success: true };
-    }
 
     const rowPayload = mapDiseaseToRow(updated);
     const { data, error } = await supabase
@@ -403,14 +453,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       if (isSchemaMissingError(error)) {
         setIsSchemaMissing(true);
-        return { success: true };
       }
-      console.warn('Supabase updateDisease error:', error.message);
+      console.error('Supabase updateDisease error:', error.message);
       setDiseases(previous);
-      setDataError(`Gagal memperbarui penyakit: ${error.message}`);
-      return { success: false, error: error.message };
+      const errMsg = `Gagal memperbarui penyakit di Supabase: ${error.message}`;
+      setDataError(errMsg);
+      return { success: false, error: errMsg };
     }
 
+    setIsSchemaMissing(false);
+    setDataError(null);
     if (data) {
       const synced = mapRowToDisease(data as DiseaseRow);
       setDiseases((prev) => prev.map((d) => (d.id === synced.id ? synced : d)));
@@ -419,36 +471,39 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteDisease = async (id: string): Promise<CrudResult> => {
+    if (!isSupabaseConfigured) {
+      setDataError(SUPABASE_KEY_MISSING_MSG);
+      return { success: false, error: SUPABASE_KEY_MISSING_MSG };
+    }
+
     const previous = diseasesRef.current;
     setDiseases((prev) => prev.filter((d) => d.id !== id));
-
-    if (!supabase || isSchemaMissing) {
-      return { success: true };
-    }
 
     const { error } = await supabase.from('diseases').delete().eq('id', id);
 
     if (error) {
       if (isSchemaMissingError(error)) {
         setIsSchemaMissing(true);
-        return { success: true };
       }
-      console.warn('Supabase deleteDisease error:', error.message);
+      console.error('Supabase deleteDisease error:', error.message);
       setDiseases(previous);
-      setDataError(`Gagal menghapus penyakit: ${error.message}`);
-      return { success: false, error: error.message };
+      const errMsg = `Gagal menghapus penyakit di Supabase: ${error.message}`;
+      setDataError(errMsg);
+      return { success: false, error: errMsg };
     }
+
+    setIsSchemaMissing(false);
+    setDataError(null);
     return { success: true };
   };
 
   const resetDiseases = async (): Promise<CrudResult> => {
-    const previous = diseasesRef.current;
-    setDiseases(defaultDiseases);
-
-    if (!supabase) {
-      return { success: true };
+    if (!isSupabaseConfigured) {
+      setDataError(SUPABASE_KEY_MISSING_MSG);
+      return { success: false, error: SUPABASE_KEY_MISSING_MSG };
     }
 
+    const previous = diseasesRef.current;
     const rows = defaultDiseases.map((d) => mapDiseaseToRow(d));
     const { data, error } = await supabase
       .from('diseases')
@@ -458,23 +513,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       if (isSchemaMissingError(error)) {
         setIsSchemaMissing(true);
-        return { success: true };
       }
-      console.warn('Supabase resetDiseases error:', error.message);
+      console.error('Supabase resetDiseases error:', error.message);
       setDiseases(previous);
-      setDataError(`Gagal mereset data penyakit: ${error.message}`);
-      return { success: false, error: error.message };
+      const errMsg = `Gagal mereset data penyakit di Supabase: ${error.message}`;
+      setDataError(errMsg);
+      return { success: false, error: errMsg };
     }
 
     setIsSchemaMissing(false);
+    setDataError(null);
     if (data) {
       setDiseases((data as DiseaseRow[]).map(mapRowToDisease));
     }
     return { success: true };
   };
 
-  // Articles CRUD Implementations
+  // Articles CRUD Implementations (Strict Supabase Single Source of Truth)
   const addArticle = async (newArticle: Article): Promise<CrudResult> => {
+    if (!isSupabaseConfigured) {
+      setDataError(SUPABASE_KEY_MISSING_MSG);
+      return { success: false, error: SUPABASE_KEY_MISSING_MSG };
+    }
+
     const withStatus: Article = {
       ...newArticle,
       status: newArticle.status || 'published',
@@ -482,28 +543,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const previous = articlesRef.current;
     setArticles((prev) => [withStatus, ...prev]);
 
-    if (!supabase || isSchemaMissing) {
-      return { success: true };
-    }
-
     const rowPayload = mapArticleToRow(withStatus);
     const { data, error } = await supabase
       .from('articles')
-      .insert(rowPayload)
+      .upsert(rowPayload, { onConflict: 'id' })
       .select()
       .single();
 
     if (error) {
       if (isSchemaMissingError(error)) {
         setIsSchemaMissing(true);
-        return { success: true };
       }
-      console.warn('Supabase addArticle error:', error.message);
+      console.error('Supabase addArticle error:', error.message);
       setArticles(previous);
-      setDataError(`Gagal menerbitkan artikel: ${error.message}`);
-      return { success: false, error: error.message };
+      const errMsg = `Gagal menerbitkan artikel ke Supabase: ${error.message}`;
+      setDataError(errMsg);
+      return { success: false, error: errMsg };
     }
 
+    setIsSchemaMissing(false);
+    setDataError(null);
     if (data) {
       const synced = mapRowToArticle(data as ArticleRow);
       setArticles((prev) => prev.map((a) => (a.id === synced.id ? synced : a)));
@@ -512,12 +571,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateArticle = async (id: string, updated: Partial<Article>): Promise<CrudResult> => {
+    if (!isSupabaseConfigured) {
+      setDataError(SUPABASE_KEY_MISSING_MSG);
+      return { success: false, error: SUPABASE_KEY_MISSING_MSG };
+    }
+
     const previous = articlesRef.current;
     setArticles((prev) => prev.map((a) => (a.id === id ? { ...a, ...updated } : a)));
-
-    if (!supabase || isSchemaMissing) {
-      return { success: true };
-    }
 
     const rowPayload = mapArticleToRow(updated);
     const { data, error } = await supabase
@@ -530,14 +590,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       if (isSchemaMissingError(error)) {
         setIsSchemaMissing(true);
-        return { success: true };
       }
-      console.warn('Supabase updateArticle error:', error.message);
+      console.error('Supabase updateArticle error:', error.message);
       setArticles(previous);
-      setDataError(`Gagal memperbarui artikel: ${error.message}`);
-      return { success: false, error: error.message };
+      const errMsg = `Gagal memperbarui artikel di Supabase: ${error.message}`;
+      setDataError(errMsg);
+      return { success: false, error: errMsg };
     }
 
+    setIsSchemaMissing(false);
+    setDataError(null);
     if (data) {
       const synced = mapRowToArticle(data as ArticleRow);
       setArticles((prev) => prev.map((a) => (a.id === synced.id ? synced : a)));
@@ -546,37 +608,40 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteArticle = async (id: string): Promise<CrudResult> => {
+    if (!isSupabaseConfigured) {
+      setDataError(SUPABASE_KEY_MISSING_MSG);
+      return { success: false, error: SUPABASE_KEY_MISSING_MSG };
+    }
+
     const previous = articlesRef.current;
     setArticles((prev) => prev.filter((a) => a.id !== id));
-
-    if (!supabase || isSchemaMissing) {
-      return { success: true };
-    }
 
     const { error } = await supabase.from('articles').delete().eq('id', id);
 
     if (error) {
       if (isSchemaMissingError(error)) {
         setIsSchemaMissing(true);
-        return { success: true };
       }
-      console.warn('Supabase deleteArticle error:', error.message);
+      console.error('Supabase deleteArticle error:', error.message);
       setArticles(previous);
-      setDataError(`Gagal menghapus artikel: ${error.message}`);
-      return { success: false, error: error.message };
+      const errMsg = `Gagal menghapus artikel di Supabase: ${error.message}`;
+      setDataError(errMsg);
+      return { success: false, error: errMsg };
     }
+
+    setIsSchemaMissing(false);
+    setDataError(null);
     return { success: true };
   };
 
   const resetArticles = async (): Promise<CrudResult> => {
-    const seeded = defaultArticles.map((a) => ({ ...a, status: a.status || 'published' }));
-    const previous = articlesRef.current;
-    setArticles(seeded);
-
-    if (!supabase) {
-      return { success: true };
+    if (!isSupabaseConfigured) {
+      setDataError(SUPABASE_KEY_MISSING_MSG);
+      return { success: false, error: SUPABASE_KEY_MISSING_MSG };
     }
 
+    const seeded = defaultArticles.map((a) => ({ ...a, status: a.status || 'published' }));
+    const previous = articlesRef.current;
     const rows = seeded.map((a) => mapArticleToRow(a));
     const { data, error } = await supabase
       .from('articles')
@@ -586,15 +651,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       if (isSchemaMissingError(error)) {
         setIsSchemaMissing(true);
-        return { success: true };
       }
-      console.warn('Supabase resetArticles error:', error.message);
+      console.error('Supabase resetArticles error:', error.message);
       setArticles(previous);
-      setDataError(`Gagal mereset data artikel: ${error.message}`);
-      return { success: false, error: error.message };
+      const errMsg = `Gagal mereset data artikel di Supabase: ${error.message}`;
+      setDataError(errMsg);
+      return { success: false, error: errMsg };
     }
 
     setIsSchemaMissing(false);
+    setDataError(null);
     if (data) {
       setArticles((data as ArticleRow[]).map(mapRowToArticle));
     }

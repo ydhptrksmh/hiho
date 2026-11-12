@@ -19,10 +19,20 @@ import { FoodCheckerModal } from './components/FoodCheckerModal';
 import { CreateArticleModal } from './components/CreateArticleModal';
 import { AdminPortal } from './admin/AdminPortal';
 import { Disease, Article, HealthCategory } from './types';
-import { ArrowUp, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowUp, CheckCircle2, ShieldCheck } from 'lucide-react';
 
 function MainApp() {
-  const { diseases, articles, addArticle, deleteArticle, isAdmin, isLoadingData } = useData();
+  const {
+    diseases,
+    articles,
+    addArticle,
+    deleteArticle,
+    isAdmin,
+    isLoadingData,
+    dataError,
+    clearDataError,
+    retrySupabaseSync,
+  } = useData();
 
   // Mode: public site or admin portal
   const [isAdminMode, setIsAdminMode] = useState<boolean>(() => {
@@ -98,8 +108,14 @@ function MainApp() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Only show published articles on public site
+  // Only show published articles on public site, and keep open detail modals live-synced
   const publishedArticles = articles.filter((a) => a.status !== 'draft');
+  const activeSelectedDisease = selectedDisease
+    ? diseases.find((d) => d.id === selectedDisease.id) || selectedDisease
+    : null;
+  const activeSelectedArticle = selectedArticle
+    ? articles.find((a) => a.id === selectedArticle.id) || selectedArticle
+    : null;
 
   // If in Admin Mode, render the full protected Admin Portal
   if (isAdminMode) {
@@ -118,9 +134,36 @@ function MainApp() {
 
       {/* Main Content View Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        {dataError && (
+          <div
+            role="alert"
+            className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-300 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs sm:text-sm text-rose-900"
+          >
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>{dataError}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => void retrySupabaseSync()}
+                className="px-3 py-1.5 rounded-xl bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold transition-colors"
+              >
+                Muat Ulang Supabase
+              </button>
+              <button
+                type="button"
+                onClick={clearDataError}
+                className="px-2.5 py-1.5 rounded-xl text-rose-800 hover:bg-rose-100 text-xs font-bold transition-colors"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        )}
         {isLoadingData && diseases.length === 0 && articles.length === 0 && (
           <div className="mb-6 p-4 rounded-2xl bg-white border border-emerald-200 shadow-xs text-center text-xs sm:text-sm font-semibold text-emerald-900 animate-pulse">
-            Memuat data direktori penyakit &amp; artikel terbaru...
+            Memuat data direktori penyakit &amp; artikel terbaru dari Supabase...
           </div>
         )}
         {currentTab === 'home' && (
@@ -171,7 +214,7 @@ function MainApp() {
 
       {/* Interactive Modals & Drawers */}
       <DiseaseDetailModal
-        disease={selectedDisease}
+        disease={activeSelectedDisease}
         onClose={() => setSelectedDisease(null)}
         onOpenChecker={() => {
           setCheckerQuery('');
@@ -180,7 +223,7 @@ function MainApp() {
       />
 
       <ArticleDetailModal
-        article={selectedArticle}
+        article={activeSelectedArticle}
         onClose={() => setSelectedArticle(null)}
       />
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useData } from '../context/DataContext';
+import { isSupabaseConfigured, isSupabasePlaceholderKey } from '../lib/supabase';
 import {
   Activity,
   FileText,
@@ -11,7 +12,6 @@ import {
   ArrowRight,
   Lightbulb,
   Sliders,
-  ShieldCheck,
   Camera,
   AlertCircle,
 } from 'lucide-react';
@@ -33,8 +33,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     stats,
     diseases,
     articles,
-    tips,
     isSchemaMissing,
+    dataError,
+    clearDataError,
     retrySupabaseSync,
     resetDiseases,
     resetArticles,
@@ -82,7 +83,47 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       </div>
 
-      {isSchemaMissing && (
+      {dataError && (
+        <div
+          role="alert"
+          className="p-4 sm:p-5 rounded-2xl bg-rose-50 border border-rose-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-rose-950"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <span>{dataError}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => void retrySupabaseSync()}
+              className="px-3 py-1.5 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold transition-colors"
+            >
+              Muat Ulang Supabase
+            </button>
+            <button
+              type="button"
+              onClick={clearDataError}
+              className="px-2.5 py-1.5 rounded-xl text-rose-800 hover:bg-rose-100 font-bold transition-colors"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isSupabaseConfigured && isSupabasePlaceholderKey && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-300 flex items-start gap-2.5 text-xs text-amber-950">
+          <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold">Publishable / Anon Key Supabase masih menggunakan placeholder</p>
+            <p className="text-amber-900">
+              Ganti nilai <code className="font-mono bg-amber-100 px-1.5 py-0.5 rounded">PASTE_PUBLISHABLE_KEY_LENGKAP_DISINI</code> di <code className="font-mono bg-amber-100 px-1.5 py-0.5 rounded">src/lib/supabase.ts</code> dengan Publishable/Anon Key proyek Supabase Anda (atau atur <code className="font-mono bg-amber-100 px-1.5 py-0.5 rounded">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>) agar sinkronisasi cloud aktif.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isSupabaseConfigured && isSchemaMissing && (
         <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-950">
           <div className="flex items-start gap-2.5">
             <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
@@ -103,14 +144,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
-      {!isSchemaMissing && diseases.length === 0 && articles.length === 0 && (
+      {isSupabaseConfigured && !isSchemaMissing && (diseases.length === 0 || articles.length === 0) && (
         <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-emerald-950">
           <div className="flex items-start gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <p className="font-bold">Supabase terhubung, namun tabel masih kosong</p>
+              <p className="font-bold">Supabase terhubung, namun salah satu tabel masih kosong</p>
               <p className="text-emerald-900">
-                Klik tombol di sebelah kanan untuk mengisi data awal HIHO (8 kondisi penyakit &amp; 6 artikel gizi) ke Supabase, atau tambahkan data baru secara manual.
+                Klik tombol di sebelah kanan untuk mengisi data awal HIHO (8 kondisi penyakit &amp; 6 artikel gizi) ke Supabase secara langsung.
               </p>
             </div>
           </div>

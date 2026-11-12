@@ -1,6 +1,12 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Article, Disease, FoodGuideline, SampleMealPlan } from '../types';
 
+export const SUPABASE_URL = 'https://fnemzuoszcgxnfhlmqnt.supabase.co';
+export const SUPABASE_ANON_KEY = 'PASTE_PUBLISHABLE_KEY_LENGKAP_DISINI';
+
+export const DEFAULT_SUPABASE_URL = SUPABASE_URL;
+export const DEFAULT_SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
+
 function readEnvVar(primaryKey: string, fallbackKey: string): string {
   const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
   const procEnv = typeof process !== 'undefined' ? process.env : undefined;
@@ -14,26 +20,59 @@ function readEnvVar(primaryKey: string, fallbackKey: string): string {
   ).trim();
 }
 
-export const supabaseUrl = readEnvVar('NEXT_PUBLIC_SUPABASE_URL', 'VITE_SUPABASE_URL');
-export const supabaseAnonKey = readEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY');
+export function resolveSupabaseConfig(
+  rawUrl?: string,
+  rawKey?: string
+): {
+  url: string;
+  anonKey: string;
+  isPlaceholderKey: boolean;
+  isConfigured: boolean;
+} {
+  const cleanUrl = (rawUrl || '').trim();
+  const cleanKey = (rawKey || '').trim();
 
-export const isSupabaseConfigured = Boolean(
-  supabaseUrl &&
-  supabaseAnonKey &&
-  supabaseUrl.startsWith('http') &&
-  !supabaseUrl.includes('MY_SUPABASE') &&
-  !supabaseAnonKey.includes('MY_SUPABASE')
+  const url =
+    cleanUrl && cleanUrl.startsWith('http') && !cleanUrl.includes('MY_SUPABASE')
+      ? cleanUrl
+      : SUPABASE_URL;
+
+  const anonKey =
+    cleanKey && !cleanKey.includes('MY_SUPABASE')
+      ? cleanKey
+      : SUPABASE_ANON_KEY;
+
+  const isPlaceholderKey =
+    !anonKey ||
+    anonKey === 'PASTE_PUBLISHABLE_KEY_LENGKAP_DISINI' ||
+    anonKey === 'TEMPEL_PUBLISHABLE_KEY_DISINI' ||
+    anonKey.includes('MY_SUPABASE');
+
+  return {
+    url,
+    anonKey,
+    isPlaceholderKey,
+    isConfigured: Boolean(url && anonKey && url.startsWith('http') && !isPlaceholderKey),
+  };
+}
+
+const resolvedSupabaseConfig = resolveSupabaseConfig(
+  readEnvVar('NEXT_PUBLIC_SUPABASE_URL', 'VITE_SUPABASE_URL'),
+  readEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY')
 );
 
-export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      realtime: {
-        params: {
-          eventsPerSecond: 10,
-        },
-      },
-    })
-  : null;
+export const supabaseUrl = resolvedSupabaseConfig.url;
+export const supabaseAnonKey = resolvedSupabaseConfig.anonKey;
+export const isSupabasePlaceholderKey = resolvedSupabaseConfig.isPlaceholderKey;
+export const isSupabaseConfigured = resolvedSupabaseConfig.isConfigured;
+
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+});
 
 export interface SupabaseErrorLike {
   code?: string | null;

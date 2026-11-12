@@ -169,9 +169,31 @@ import {
   mapArticleToRow,
   mapRowToArticle,
   isSchemaMissingError,
+  resolveSupabaseConfig,
+  DEFAULT_SUPABASE_URL,
+  DEFAULT_SUPABASE_ANON_KEY,
   DiseaseRow,
   ArticleRow,
 } from '../lib/supabase';
+
+test('resolveSupabaseConfig falls back to hardcoded default URL and placeholder key when env is empty', () => {
+  const empty = resolveSupabaseConfig('', '');
+  assert.equal(empty.url, 'https://fnemzuoszcgxnfhlmqnt.supabase.co');
+  assert.equal(empty.anonKey, 'PASTE_PUBLISHABLE_KEY_LENGKAP_DISINI');
+  assert.equal(empty.isPlaceholderKey, true);
+  assert.equal(empty.isConfigured, false);
+
+  const exampleEnv = resolveSupabaseConfig('MY_SUPABASE_URL', 'MY_SUPABASE_ANON_KEY');
+  assert.equal(exampleEnv.url, DEFAULT_SUPABASE_URL);
+  assert.equal(exampleEnv.anonKey, DEFAULT_SUPABASE_ANON_KEY);
+  assert.equal(exampleEnv.isConfigured, false);
+
+  const customKeyOnly = resolveSupabaseConfig('', 'sb_publishable_live_key_123');
+  assert.equal(customKeyOnly.url, DEFAULT_SUPABASE_URL);
+  assert.equal(customKeyOnly.anonKey, 'sb_publishable_live_key_123');
+  assert.equal(customKeyOnly.isPlaceholderKey, false);
+  assert.equal(customKeyOnly.isConfigured, true);
+});
 
 test('isSchemaMissingError detects PGRST205 and 42P01 missing table errors cleanly', () => {
   assert.equal(isSchemaMissingError(null), false);
